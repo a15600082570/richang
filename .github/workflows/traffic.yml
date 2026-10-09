@@ -18,7 +18,7 @@ jobs:
           ref: gh-pages
       - name: Fetch aggregate traffic
         env:
-          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN || secrets.RAFFIC_TOKEN }}
           REPOSITORY: ${{ github.repository }}
         run: |
           python3 - <<'PY'
