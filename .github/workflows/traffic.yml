@@ -1,0 +1,45 @@
+name: Refresh repository traffic
+on:
+  workflow_dispatch:
+  push:
+    branches: [gh-pages]
+    paths: ['index.html', 'trip-todo.html', '.github/workflows/traffic.yml']
+permissions:
+  contents: write
+concurrency:
+  group: traffic-snapshot
+  cancel-in-progress: false
+jobs:
+  traffic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+      - name: Fetch aggregate traffic
+        env:
+          TRAFFIC_TOKEN: ${{ secrets.TRAFFIC_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import os,json,urllib.request,datetime
+          token=os.environ.get('TRAFFIC_TOKEN')
+          if not token:
+              raise SystemExit('Add TRAFFIC_TOKEN repository secret with repository Administration read permission.')
+          def get(path):
+              request=urllib.request.Request('https://api.github.com/repos/'+os.environ['REPOSITORY']+'/traffic/'+path,headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28'})
+              with urllib.request.urlopen(request,timeout=30) as response:return json.load(response)
+          views=get('views');clones=get('clones')
+          snapshot={'updated_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'views':views['count'],'visitors':views['uniques'],'clones':clones['count'],'cloners':clones['uniques']}
+          with open('traffic.json','w') as f:json.dump(snapshot,f)
+          PY
+      - name: Publish aggregate snapshot
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add traffic.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update aggregate repository traffic snapshot'
+            git pull --rebase origin gh-pages
+            git push origin HEAD:gh-pages
+          fi
